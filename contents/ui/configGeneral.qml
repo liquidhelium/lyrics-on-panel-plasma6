@@ -28,6 +28,7 @@ Kirigami.FormLayout {
     property alias cfg_preferedWidgetWidth: preferedWidgetWidthTextField.text
     property alias cfg_hideItemWhenNoControlChecked: hideItemWhenNoControlChecked.checked
     property alias cfg_lxMusicPort: lxMusicPortTextField.text
+    property alias cfg_showDebugText: showDebugTextChecked.checked
 
     QQC2.RadioButton {
         id: yesPlayMusicPropriataryRadioButton
@@ -122,6 +123,12 @@ Kirigami.FormLayout {
         id: lxMusicPortTextField
         Kirigami.FormData.label: i18n("LX Music Local Port: ")
         enabled: lxMusicPropriataryRadioButton.checked
+    }
+
+    QQC2.CheckBox {
+        id: showDebugTextChecked
+        Kirigami.FormData.label: i18n("Show Debug Text: ")
+        checkable: true
     }
 
     // trackName	true	string	Title of the track

@@ -47,23 +47,94 @@ PlasmoidItem {
     // Should ask uiYzzi if problem occurs.
     Plasmoid.status: mpris2Model.currentPlayer?.canControl || !config_hideItemWhenNoControlChecked ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.HiddenStatus;
 
-    Text {
-        id: lyricText
-        text: ""
-        color: config_lyricTextColor
-        font.pixelSize: config_lyricTextSize
-        font.bold: config_lyricTextBold
-        font.italic: config_lyricTextItalic
-        anchors.right: parent.right
-        anchors.rightMargin: 6 * (config_mediaControllItemSize + config_mediaControllSpacing)
+    Item {
+        id: lyricContainer
+        anchors.left: parent.left
+        anchors.leftMargin: 5
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: config_lyricTextVerticalOffset
+        height: lyricText.contentHeight
+        clip: true
+
+        // Calculate width based on the user-defined preferred width
+        width: config_preferedWidgetWidth - iconsContainer.width - anchors.leftMargin - 5 // 5 for right margin
+
+        Text {
+            id: lyricText
+            y: (parent.height - contentHeight) / 2
+            text: "" // Set by logic
+            color: config_lyricTextColor
+            font.pixelSize: config_lyricTextSize
+            font.bold: config_lyricTextBold
+            font.italic: config_lyricTextItalic
+            wrapMode: Text.NoWrap
+
+            readonly property bool shouldAnimate: paintedWidth > lyricContainer.width
+
+            function updateAnimation() {
+                console.log("--- Lyric Width Debug ---");
+                console.log("Config Preferred Width:", config_preferedWidgetWidth);
+                console.log("Icons Container Width:", iconsContainer.width);
+                console.log("Calculated Lyric Container Width:", lyricContainer.width);
+                console.log("Lyric Text Painted Width:", lyricText.paintedWidth);
+                console.log("Should Animate?:", shouldAnimate);
+                console.log("--------------------------");
+
+                scrollAnimation.stop();
+                lyricText.x = 0;
+                if (shouldAnimate) {
+                    scrollAnimation.start();
+                }
+            }
+
+            onTextChanged: updateAnimation()
+            onPaintedWidthChanged: updateAnimation()
+            
+            Connections {
+                target: lyricContainer
+                function onWidthChanged() {
+                    lyricText.updateAnimation()
+                }
+            }
+
+            SequentialAnimation {
+                id: scrollAnimation
+                running: false
+                loops: Animation.Infinite
+                
+                PauseAnimation { duration: 1500 }
+
+                NumberAnimation {
+                    target: lyricText
+                    property: "x"
+                    from: 0
+                    to: lyricContainer.width - lyricText.paintedWidth
+                    duration: Math.max(0, (lyricText.paintedWidth - lyricContainer.width) * 15)
+                }
+
+                PauseAnimation { duration: 1500 }
+            }
+        }
+    }
+
+    Text {
+        id: debugText
+        anchors.left: parent.left
+        anchors.top: lyricContainer.bottom
+        anchors.topMargin: 5
+        color: "red"
+        font.pixelSize: 10
+        text: "ContainerW: " + lyricContainer.width.toFixed(1) +
+              " | TextW: " + lyricText.paintedWidth.toFixed(1) +
+              " | PrefW: " + config_preferedWidgetWidth +
+              " | Animate: " + lyricText.shouldAnimate
+        visible: config_showDebugText
     }
 
     Item {
         id: iconsContainer
         anchors.right: parent.right
-        anchors.rightMargin: 1 
+        anchors.rightMargin: 1
         anchors.verticalCenter: parent.verticalCenter
         width: 5 * config_mediaControllItemSize + 4 * config_mediaControllSpacing
         height: config_mediaControllItemSize
@@ -200,6 +271,8 @@ PlasmoidItem {
     property bool config_hideItemWhenNoControlChecked: Plasmoid.configuration.hideItemWhenNoControlChecked;
 
     property int config_lxMusicPort: Plasmoid.configuration.lxMusicPort;
+
+    property bool config_showDebugText: Plasmoid.configuration.showDebugText;
 
     /**
     ===============================================================================================================================================================================
