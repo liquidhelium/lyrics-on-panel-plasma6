@@ -13,6 +13,13 @@
 </code></b></p>
 <p align="center"><b><code>Display lyrics of the currently playing music anywhere on the screen</code></b></p>
 
+### 液氦个人改版：
+1. 添加网易云歌词来源
+2. 歌词不溢出而是滚动
+
+原仓库：https://github.com/KangweiZhu/lyrics-on-panel  
+由于我没有fork原仓库而是在本地新建存储库，所以没有显示为fork, 抱歉
+
 
 ### 目前版本
 
