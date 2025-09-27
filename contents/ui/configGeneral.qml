@@ -5,19 +5,20 @@ import org.kde.kquickcontrols 2.0 as KQControls
 import org.kde.plasma.core 2.0 as PlasmaCore
 import QtQuick.Layouts 1.0 as QQLayouts
 
-Kirigami.FormLayout {
+Item {
     id: generalPage
     signal configurationChanged
 
-    property alias cfg_yesPlayMusicChecked: yesPlayMusicPropriataryRadioButton.checked 
-    property alias cfg_spotifyChecked: spotifyPropriataryRadioButton.checked  
-    property alias cfg_lxMusicChecked: lxMusicPropriataryRadioButton.checked   
+    property alias cfg_yesPlayMusicChecked: yesPlayMusicPropriataryRadioButton.checked
+    property alias cfg_spotifyChecked: spotifyPropriataryRadioButton.checked
+    property alias cfg_lxMusicChecked: lxMusicPropriataryRadioButton.checked
+    property alias cfg_neteaseMusicChecked: neteaseMusicPropriataryRadioButton.checked
     property alias cfg_compatibleModeChecked: compatibleModeRadioButton.checked
 
-    property alias cfg_lyricTextSize: lyricTextSizeSpinBox.value 
+    property alias cfg_lyricTextSize: lyricTextSizeSpinBox.value
     property alias cfg_lyricTextColor: lyricTextColorButton.color
-    property alias cfg_lyricTextBold: boldButton.checked   
-    property alias cfg_lyricTextItalic: italicButton.checked 
+    property alias cfg_lyricTextBold: boldButton.checked
+    property alias cfg_lyricTextItalic: italicButton.checked
     property alias cfg_lyricTextVerticalOffset: lyricTextVerticalOffsetSpinBox.value
 
     property alias cfg_mediaControllSpacing: mediaControllSpacingSpinBox.value
@@ -30,9 +31,12 @@ Kirigami.FormLayout {
     property alias cfg_lxMusicPort: lxMusicPortTextField.text
     property alias cfg_showDebugText: showDebugTextChecked.checked
 
-    QQC2.RadioButton {
-        id: yesPlayMusicPropriataryRadioButton
-        Kirigami.FormData.label: i18n("Modes: ")
+    Kirigami.FormLayout {
+        anchors.fill: parent
+
+        QQC2.RadioButton {
+            id: yesPlayMusicPropriataryRadioButton
+            Kirigami.FormData.label: i18n("Modes: ")
         text: i18n("YesPlayMusic(YPM)")
     }
 
@@ -44,6 +48,11 @@ Kirigami.FormLayout {
     QQC2.RadioButton {
         id: lxMusicPropriataryRadioButton
         text: i18n("LX Music")
+    }
+
+    QQC2.RadioButton {
+        id: neteaseMusicPropriataryRadioButton
+        text: i18n("Netease Cloud Music")
     }
 
     QQC2.RadioButton {
@@ -137,4 +146,5 @@ Kirigami.FormLayout {
     // duration	true	number	Track's duration
     // plainLyrics	true	string	Plain lyrics for the track
     // syncedLyrics	true	string	Synchronized lyrics for the track
-}   
+    }
+}

@@ -72,13 +72,13 @@ PlasmoidItem {
             readonly property bool shouldAnimate: paintedWidth > lyricContainer.width
 
             function updateAnimation() {
-                console.log("--- Lyric Width Debug ---");
-                console.log("Config Preferred Width:", config_preferedWidgetWidth);
-                console.log("Icons Container Width:", iconsContainer.width);
-                console.log("Calculated Lyric Container Width:", lyricContainer.width);
-                console.log("Lyric Text Painted Width:", lyricText.paintedWidth);
-                console.log("Should Animate?:", shouldAnimate);
-                console.log("--------------------------");
+                // console.log("--- Lyric Width Debug ---");
+                // console.log("Config Preferred Width:", config_preferedWidgetWidth);
+                // console.log("Icons Container Width:", iconsContainer.width);
+                // console.log("Calculated Lyric Container Width:", lyricContainer.width);
+                // console.log("Lyric Text Painted Width:", lyricText.paintedWidth);
+                // console.log("Should Animate?:", shouldAnimate);
+                // console.log("--------------------------");
 
                 scrollAnimation.stop();
                 lyricText.x = 0;
@@ -102,7 +102,7 @@ PlasmoidItem {
                 running: false
                 loops: Animation.Infinite
                 
-                PauseAnimation { duration: 1500 }
+                PauseAnimation { duration: 500 }
 
                 NumberAnimation {
                     target: lyricText
@@ -253,6 +253,7 @@ PlasmoidItem {
     // Applet UI behavior configuration
     property bool config_yesPlayMusicChecked: Plasmoid.configuration.yesPlayMusicChecked;
     property bool config_lxMusicChecked: Plasmoid.configuration.lxMusicChecked;
+    property bool config_neteaseMusicChecked: Plasmoid.configuration.neteaseMusicChecked;
     property bool config_spotifyChecked: Plasmoid.configuration.spotifyChecked;
     property bool config_compatibleModeChecked: Plasmoid.configuration.compatibleModeChecked;
 
@@ -304,7 +305,8 @@ PlasmoidItem {
         running: true
         repeat: true
         onTriggered: {
-            //log();
+            // log();
+            // console.log(multiplexerModel);
             /**
                 Use translator if you don't understand the comment... Too lazy to rewrite it in English.
 
@@ -316,24 +318,31 @@ PlasmoidItem {
                 
                 重置后，重新判断当前预期的播放器是哪个。并且开启对应的timer（线程）
             */ 
-            if (
-                !currentMediaTitle && !currentMediaArtists ||
-                mpris2PreviousPlayerIdentity != mpris2CurrentPlayerIdentity ||
-                prevExpectedPlayerIdentity != currExpectedPlayerIdentity ||
-                currentMediaTitle != previousMediaTitle || 
-                currentMediaArtists != previousMediaArtists
-            ){
+            var condition1 = !currentMediaTitle && !currentMediaArtists;
+            var condition2 = mpris2PreviousPlayerIdentity != mpris2CurrentPlayerIdentity;
+            var condition3 = prevExpectedPlayerIdentity != currExpectedPlayerIdentity;
+            var condition4 = currentMediaTitle != previousMediaTitle;
+            var condition5 = currentMediaArtists != previousMediaArtists;
+
+            if (condition1 || condition2 || condition3 || condition4 || condition5) {
+                console.log("Scheduler: Conditions met for reset. C1:", condition1, "C2:", condition2, "C3:", condition3, "C4:", condition4, "C5:", condition5);
                 reset();
                 if (currExpectedPlayerIdentity === "compatible" || currExpectedPlayerIdentity === "Spotify") {
+                    console.log("Scheduler: Starting compatibleModeTimer");
                     compatibleModeTimer.start()
                 } else if (currExpectedPlayerIdentity === "YesPlayMusic") {
                     if (mpris2CurrentPlayerIdentity === "YesPlayMusic") {
+                        console.log("Scheduler: Starting yesPlayMusicTimer");
                         yesPlayMusicTimer.start();
                     }
                 } else if (currExpectedPlayerIdentity === "lx-music-desktop") {
                     if (mpris2CurrentPlayerIdentity === "lx-music-desktop") {
+                        console.log("Scheduler: Starting lxMusicTimer");
                         lxMusicTimer.start();
                     }
+                } else if (currExpectedPlayerIdentity === "NetEase Cloud Music Gtk4") {
+                    console.log("Scheduler: Starting neteaseTimer");
+                    neteaseTimer.start();
                 }
             }
         }
@@ -360,6 +369,16 @@ PlasmoidItem {
         repeat: true 
         onTriggered: {
             lxHandler();
+        }
+    }
+
+    Timer {
+        id: neteaseTimer
+        interval: 200
+        running: false
+        repeat: true
+        onTriggered: {
+            neteaseHandler();
         }
     }
     
@@ -406,28 +425,52 @@ PlasmoidItem {
         interval: 1
         running: false
         repeat: true
-        onTriggered: { 
-            // If the current playing media source in mpris2 datasource doesn't match the expected media source, then no lyric will be displayed
-            if ((currExpectedPlayerIdentity !== 'compatible') && (mpris2CurrentPlayerIdentity !== currExpectedPlayerIdentity)) {
+        onTriggered: {
+            var playerMismatched = (currExpectedPlayerIdentity !== 'compatible') && (mpris2CurrentPlayerIdentity !== currExpectedPlayerIdentity);
+            if (playerMismatched) {
+                console.log("Display: Player mismatch. Expected:", currExpectedPlayerIdentity, "Got:", mpris2CurrentPlayerIdentity, ". Clearing lyric.");
                 lyricText.text = " ";
-            } else {
-                if (currentMediaTitle === "Advertisement") {
-                    lyricText.text = currentMediaTitle;
-                } else {
-                    for (let i = 0; i < lyricsWTimes.count; i++) {
-                        if (lyricsWTimes.get(i).time >= mprisCurrentPlayingSongTimeMS) {
-                            currentLyricIndex = i > 0 ? i - 1 : 0;
-                            var currentLWT = lyricsWTimes.get(currentLyricIndex);
-                            var currentLyric = currentLWT.lyric;
-                            if (!currentLWT || !currentLyric || currentLyric === "" && prevNonEmptyLyric != "") {
-                                lyricText.text = prevNonEmptyLyric;
-                            } else {
-                                lyricText.text = currentLyric;
-                                prevNonEmptyLyric = currentLyric;
-                            }
-                            break;
+                return;
+            }
+
+            if (currentMediaTitle === "Advertisement") {
+                lyricText.text = currentMediaTitle;
+                return;
+            }
+
+            if (lyricsWTimes.count === 0) {
+                console.log("Display: No lyrics available to display.");
+                return;
+            }
+
+            var foundLyric = false;
+            for (let i = 0; i < lyricsWTimes.count; i++) {
+                // console.log("Display: Checking lyric index", i, "with timestamp", lyricsWTimes.get(i).time, "against current time", mprisCurrentPlayingSongTimeMS);
+                if (lyricsWTimes.get(i).time >= mprisCurrentPlayingSongTimeMS) {
+                    console.log("lyric: ", lyricsWTimes.get(i).lyric);
+                    currentLyricIndex = i > 0 ? i - 1 : 0;
+                    var currentLWT = lyricsWTimes.get(currentLyricIndex);
+                    var currentLyric = currentLWT.lyric;
+                    if (!currentLWT || !currentLyric || (currentLyric === "" && prevNonEmptyLyric !== "")) {
+                        lyricText.text = prevNonEmptyLyric;
+                    } else {
+                        if (lyricText.text !== currentLyric) {
+                            console.log("Display: Updating lyric to:", currentLyric);
+                            lyricText.text = currentLyric;
                         }
+                        prevNonEmptyLyric = currentLyric;
                     }
+                    foundLyric = true;
+                    break;
+                }
+            }
+
+            if (!foundLyric && lyricsWTimes.count > 0) {
+                // Handles the case for the last line of the lyric
+                var lastLWT = lyricsWTimes.get(lyricsWTimes.count - 1);
+                if (lyricText.text !== lastLWT.lyric) {
+                    console.log("Display: Reached end of lyrics, displaying last line:", lastLWT.lyric);
+                    lyricText.text = lastLWT.lyric;
                 }
             }
         }
@@ -438,12 +481,15 @@ PlasmoidItem {
     readonly property string lxmusic_base_url: {
         return "http://localhost:" + config_lxMusicPort;
     }
+    readonly property string netease_base_url: "https://music.163.com"
     readonly property string lrclib_base_url: "https://lrclib.net"
 
     // Successfully fetched the lyrics from the yesplaymusic API?
     property bool isYPMLyricFound: false;
 
     property bool isLXLyricFound: false;
+
+    property bool isNeteaseLyricFound: false;
 
     // Current Media Title (Song's name), default is empty string
     property string currentMediaTitle: mpris2Model.currentPlayer?.track ?? ""
@@ -520,6 +566,8 @@ PlasmoidItem {
             return "Spotify";
         } else if (config_lxMusicChecked) {
             return "lx-music-desktop";
+        } else if (config_neteaseMusicChecked) {
+            return "NetEase Cloud Music Gtk4";
         } else {
             return "compatible";
         }
@@ -551,17 +599,27 @@ PlasmoidItem {
     // fetch the current media id from yesplaymusic(ypm);
     function fetchMediaIdYPM() {
         var xhr = new XMLHttpRequest();
-        xhr.open("GET", ypm_base_url + "/player");
+        var url = ypm_base_url + "/player";
+        console.log("YPM: Fetching media ID from:", url);
+        xhr.open("GET", url);
         xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
-                if (xhr.responseText) {
-                    var response = JSON.parse(xhr.responseText);
-                    if (response && response.currentTrack && response.currentTrack.name === currentMediaTitle) {
-                        previousMediaTitle = currentMediaTitle;
-                        previousMediaArtists = currentMediaArtists;
-                        currentMediaYPMId = response.currentTrack.id;
-                        fetchSyncLyricYPM();
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                console.log("YPM: Media ID request status:", xhr.status);
+                if (xhr.status === 200) {
+                    if (xhr.responseText) {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response && response.currentTrack && response.currentTrack.name === currentMediaTitle) {
+                            console.log("YPM: Media ID found:", response.currentTrack.id);
+                            previousMediaTitle = currentMediaTitle;
+                            previousMediaArtists = currentMediaArtists;
+                            currentMediaYPMId = response.currentTrack.id;
+                            fetchSyncLyricYPM();
+                        } else {
+                            console.log("YPM: Media ID response mismatch or invalid.", xhr.responseText);
+                        }
                     }
+                } else {
+                    console.log("YPM: Media ID request failed. Response:", xhr.responseText);
                 }
             }
         };
@@ -571,20 +629,26 @@ PlasmoidItem {
     // fetch the current media lyric from yesplaymusic by media id
     function fetchSyncLyricYPM() {
         var xhr = new XMLHttpRequest();
-        xhr.open("GET", ypm_base_url + "/api/lyric?id=" + currentMediaYPMId);
+        var url = ypm_base_url + "/api/lyric?id=" + currentMediaYPMId;
+        console.log("YPM: Fetching lyric from:", url);
+        xhr.open("GET", url);
         xhr.onreadystatechange = function() {
-            if (xhr.status === 200) {
-                var response = JSON.parse(xhr.responseText);
-                print(xhr.responseText)
-                //console.log("YPM Network OK");
-                if (response && response.lrc && response.lrc.lyric) {
-                    lyricsWTimes.clear();
-                    //console.log("Successfully fetched YPM lyrics");
-                    isYPMLyricFound = true;
-                    parseLyric(response.lrc.lyric);
-                    //parseAndUpload(response.lrc.lyric);
-                } else if (!response.lrc || !response.lrc.lyric) {
-                    //console.log("YPM lyric not found");
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                console.log("YPM: Lyric request status:", xhr.status);
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response && response.lrc && response.lrc.lyric) {
+                        console.log("YPM: Successfully fetched lyrics.");
+                        lyricsWTimes.clear();
+                        isYPMLyricFound = true;
+                        parseLyric(response.lrc.lyric);
+                    } else {
+                        console.log("YPM: Lyric not found in response.", xhr.responseText);
+                        lyricsWTimes.clear();
+                        lyricText.text = lrc_not_exists;
+                    }
+                } else {
+                    console.log("YPM: Lyric request failed. Response:", xhr.responseText);
                     lyricsWTimes.clear();
                     lyricText.text = lrc_not_exists;
                 }
@@ -611,15 +675,26 @@ PlasmoidItem {
 
     function fetchSyncLyricLX() {
         var xhr = new XMLHttpRequest();
-        xhr.open("GET", lxmusic_base_url + "/lyric");
+        var url = lxmusic_base_url + "/lyric";
+        console.log("LX: Fetching lyric from:", url);
+        xhr.open("GET", url);
         xhr.onreadystatechange = function() {
-            if (xhr.status === 200) {
-                var lrc_raw = xhr.responseText;
-                if (lrc_raw) {
-                    lyricsWTimes.clear();
-                    isLXLyricFound = true;
-                    parseLyric(lrc_raw);
-                } else if (!lrc_raw) {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                console.log("LX: Lyric request status:", xhr.status);
+                if (xhr.status === 200) {
+                    var lrc_raw = xhr.responseText;
+                    if (lrc_raw) {
+                        console.log("LX: Successfully fetched lyrics.");
+                        lyricsWTimes.clear();
+                        isLXLyricFound = true;
+                        parseLyric(lrc_raw);
+                    } else {
+                        console.log("LX: Lyric not found in response.", xhr.responseText);
+                        lyricsWTimes.clear();
+                        lyricText.text = lrc_not_exists;
+                    }
+                } else {
+                    console.log("LX: Lyric request failed. Response:", xhr.responseText);
                     lyricsWTimes.clear();
                     lyricText.text = lrc_not_exists;
                 }
@@ -648,8 +723,9 @@ PlasmoidItem {
         [00:54.19] 秋刀魚 的滋味 貓跟妳都想瞭解
     */
     function parseLyric(lrcFile) {
-        // console.log(lrcFile)
+        console.log("Parse: Starting to parse lyric file. Length:", lrcFile.length);
         var lrcList = lrcFile.split("\n");
+        var parsedCount = 0;
         for (var i = 0; i < lrcList.length; i++) {
             var lyricPerRowWTime = lrcList[i].split("]");
             if (lyricPerRowWTime.length > 1) {
@@ -678,41 +754,44 @@ PlasmoidItem {
         }
 
         var xhr = new XMLHttpRequest();
+        console.log("Compatible: Fetching lyric from:", lrcQueryUrl);
         xhr.open("GET", lrcQueryUrl);
         xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
-                if (!xhr.responseText || xhr.responseText === "[]") {
-                    needFallback = true;
-                    previousLrcId = Number.MIN_VALUE;
-                    lyricsWTimes.clear();
-                    lyricText.text = lrc_not_exists;
-                } else {
-                    var response = JSON.parse(xhr.responseText);
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                console.log("Compatible: Lyric request status:", xhr.status);
+                if (xhr.status === 200) {
+                    if (!xhr.responseText || xhr.responseText === "[]") {
+                        console.log("Compatible: Lyric not found, enabling fallback.");
+                        needFallback = true;
+                        previousLrcId = Number.MIN_VALUE;
+                        lyricsWTimes.clear();
+                        lyricText.text = lrc_not_exists;
+                    } else {
+                        var response = JSON.parse(xhr.responseText);
+                        var foundSyncedLyrics = false;
+                        for (var i = 0; i < response.length; i++) {
+                            var responseItem = response[i];
+                            if (previousLrcId !== responseItem.id.toString()) {
+                                if (responseItem.syncedLyrics) {
+                                    console.log("Compatible: Found synced lyrics for ID:", responseItem.id);
+                                    reset();
+                                    previousLrcId = responseItem.id.toString();
+                                    isCompatibleLRCFound = true;
+                                    parseLyric(responseItem.syncedLyrics);
+                                    foundSyncedLyrics = true;
+                                    break;
+                                }
+                            }
+                        }
 
-                    /**
-                        Fix: LrcLib might return multiple result for the same [track_name, artist_name, album_name], some of the result doesn't contain the syncedLyrics field.
-
-                        An example could be as listed below
-                        [
-                            {"id":13957,"name":"Jar Of Love","trackName":"Jar Of Love","artistName":"Wanting","albumName":"Everything In The World", xxx},
-                            {"id":18131162,"name":"Jar Of Love","trackName":"Jar Of Love","artistName":"Wanting 曲婉婷","albumName":"Everything In The World","duration":229.026667, xxxx}
-                        ]
-                    */
-                    for (var i = 0; i < response.length; i++) {
-                        var responseItem = response[i]
-                        if (previousLrcId !== responseItem.id.toString()) {
-                            if (responseItem.syncedLyrics) {
-                                reset()
-                                previousLrcId = responseItem.id.toString();
-                                isCompatibleLRCFound = true;
-                                parseLyric(responseItem.syncedLyrics);
-                                break;
-                            } 
+                        if (!foundSyncedLyrics) {
+                            console.log("Compatible: Found responses, but none had synced lyrics.");
+                            isCompatibleLRCFound = true; // Mark as found to prevent spamming, even if no synced lyrics
+                            lyricText.text = lrc_not_exists;
                         }
                     }
-
-                    // If reached here, it means the lrc file is just broken or doesn't follow the standard format. No need to fallback again since actually we can retrieve it. 
-                    isCompatibleLRCFound = true;
+                } else {
+                    console.log("Compatible: Lyric request failed. Response:", xhr.responseText);
                     lyricText.text = lrc_not_exists;
                 }
             }
@@ -722,23 +801,51 @@ PlasmoidItem {
  
 
     function log() {
-        console.log("currentMediaArtists: ", currentMediaArtists);
-        console.log("previousMediaArtists: ", previousMediaArtists);
-        console.log("currentMediaTitle: ", currentMediaTitle);
-        console.log("previousMediaTitle: ", previousMediaTitle);
-        console.log("Mpris2 Model: ", JSON.stringify(mpris2Model))
-        console.log("Current Player Identity: ", mpris2CurrentPlayerIdentity);
-        console.log(mpris2Model);
-        console.log(mpris2Model.toString());
-        console.log("Is wrong player: ", isWrongPlayer());
+        console.log("==================== LOG START ====================");
+        console.log("Current Time:", new Date().toLocaleTimeString());
+        console.log("--- MPRIS Data ---");
+        console.log("Player Identity:", mpris2CurrentPlayerIdentity);
+        console.log("Track Title:", currentMediaTitle);
+        console.log("Artist:", currentMediaArtists);
+        console.log("Album:", currentMediaAlbum);
+        console.log("Playback Status:", playbackStatus);
+        console.log("Position (ms):", mprisCurrentPlayingSongTimeMS);
+        
+        console.log("--- Internal State ---");
+        console.log("Expected Player:", currExpectedPlayerIdentity);
+        console.log("Previous Title:", previousMediaTitle);
+        console.log("Previous Artist:", previousMediaArtists);
+        console.log("Is YPM Lyric Found:", isYPMLyricFound);
+        console.log("Is LX Lyric Found:", isLXLyricFound);
+        console.log("Is Netease Lyric Found:", isNeteaseLyricFound);
+        console.log("Is Compatible LRC Found:", isCompatibleLRCFound);
+        console.log("Need Fallback:", needFallback);
+
+        console.log("--- Timers ---");
+        console.log("YesPlayMusic Timer Running:", yesPlayMusicTimer.running);
+        console.log("LXMusic Timer Running:", lxMusicTimer.running);
+        console.log("Netease Timer Running:", neteaseTimer.running);
+        console.log("Compatible Mode Timer Running:", compatibleModeTimer.running);
+        console.log("Lyric Display Timer Running:", lyricDisplayTimer.running);
+        
+        console.log("--- Lyrics Data ---");
+        console.log("Lyrics lines count:", lyricsWTimes.count);
+        if (lyricsWTimes.count > 0) {
+            var firstLine = lyricsWTimes.get(0);
+            console.log("First lyric line:", firstLine.time, firstLine.lyric);
+        }
+        console.log("Displayed Lyric Text:", lyricText.text);
+        console.log("==================== LOG END ====================");
     }
 
     function parseTime(timeString) {
         var parts = timeString.split(":");
+        if (parts.length !== 2) return NaN;
         var minutes = parseInt(parts[0], 10);
         var seconds = parseFloat(parts[1]);
-        var parsedMicrosecond = (minutes * 60 + seconds) * 1000000
-        return parsedMicrosecond;
+        if (isNaN(minutes) || isNaN(seconds)) return NaN;
+        console.log(timeString,"Parsed result - Minutes:", minutes, "Seconds:", seconds);
+        return (minutes * 60 + seconds) * 1000000; // Return milliseconds
     }
 
     function previous() {
@@ -800,6 +907,63 @@ PlasmoidItem {
         }
     }
 
+    function neteaseHandler() {
+        if (currentMediaArtists === "" && currentMediaTitle === "") {
+            lyricText.text = " ";
+            lyricsWTimes.clear();
+        } else {
+            if (!isNeteaseLyricFound) {
+                searchNeteaseLyrics();
+            }
+        }
+    }
+
+    function searchNeteaseLyrics() {
+        var xhr = new XMLHttpRequest();
+        var url = netease_base_url + "/api/search/get";
+        var params = "s=" + encodeURIComponent(currentMediaTitle + " " + currentMediaArtists) + "&type=1";
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                if (response.result && response.result.songs && response.result.songs.length > 0) {
+                    console.log("songs found in Netease search:");
+                    console.log(response.result.songs);
+                    var songId = response.result.songs[0].id;
+                    fetchNeteaseLyric(songId);
+                } else {
+                    lyricsWTimes.clear();
+                    lyricText.text = lrc_not_exists;
+                }
+            }
+        };
+        xhr.send(params);
+    }
+
+    function fetchNeteaseLyric(songId) {
+        var xhr = new XMLHttpRequest();
+        var url = netease_base_url + "/api/song/lyric?id=" + songId + "&lv=-1&kv=-1&tv=-1";
+        xhr.open("GET", url, true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                if (response.lrc && response.lrc.lyric) {
+                    console.log("Successfully fetched lyric from netease");
+                    console.log(response.lrc.lyric);
+                    lyricsWTimes.clear();
+                    isNeteaseLyricFound = true;
+                    parseLyric(response.lrc.lyric);
+                } else {
+                    console.log("Failed to fetch lyric from netease");
+                    lyricsWTimes.clear();
+                    lyricText.text = lrc_not_exists;
+                }
+            }
+        };
+        xhr.send();
+    }
+
     /**
         1. Stop the compatible mode timer and yesplaymusic timer.
         2. Set the previous media title and artists to the current media title and artists.
@@ -816,6 +980,7 @@ PlasmoidItem {
         compatibleModeTimer.stop();
         yesPlayMusicTimer.stop();
         lxMusicTimer.stop();
+        neteaseTimer.stop();
         previousMediaTitle = currentMediaTitle;
         previousMediaArtists = currentMediaArtists;
         mpris2PreviousPlayerIdentity = mpris2CurrentPlayerIdentity;
@@ -828,6 +993,7 @@ PlasmoidItem {
         isCompatibleLRCFound = false;
         isYPMLyricFound = false;
         isLXLyricFound = false;
+        isNeteaseLyricFound = false;
     }
 
     /**

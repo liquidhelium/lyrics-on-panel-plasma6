@@ -14,7 +14,6 @@
 <p align="center"><b><code>Display lyrics of the currently playing music anywhere on the screen</code></b></p>
 
 
-
 ### 目前版本
 
 当前仓库版本仅在 **KDE Plasma 6** 下工作。 如需要 **KDE Plasma5** 版本，请在 [**KDE Store**](https://store.kde.org/p/2138263) 或 [**Plasma5 分支**](https://github.com/KangweiZhu/lyrics-on-panel/tree/plasma5) 进行下载。
