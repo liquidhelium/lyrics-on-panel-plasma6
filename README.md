@@ -13,7 +13,7 @@
 </code></b></p>
 <p align="center"><b><code>Display lyrics of the currently playing music anywhere on the screen</code></b></p>
 
-### 液氦个人改版：
+### 个人改版：
 1. 添加网易云歌词来源
 2. 歌词不溢出而是滚动
 
